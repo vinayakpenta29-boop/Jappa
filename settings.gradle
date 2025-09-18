@@ -1,2 +1,2 @@
-rootProject.name = "ExpenseManager"
+rootProject.name = "DataCapture"
 include ':app'
