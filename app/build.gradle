@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.expensemanager'
+    namespace 'com.datacapture'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.expensemanager"
+        applicationId "com.datacapture"
         minSdk 24
         targetSdk 34
         versionCode 1
