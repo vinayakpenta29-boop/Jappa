@@ -1,9 +1,7 @@
 package com.example.datacapture;
 
 import android.Manifest;
-import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Bundle;
@@ -18,19 +16,17 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.room.Room;
 
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-
-import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
     private static final int FRONT_CAMERA_REQUEST = 2101;
-    private static final int BACK_CAMERA_REQUEST  = 2102;
+    private static final int BACK_CAMERA_REQUEST = 2102;
     private static final int FRONT_GALLERY_REQUEST = 2103;
-    private static final int BACK_GALLERY_REQUEST  = 2104;
+    private static final int BACK_GALLERY_REQUEST = 2104;
     private static final int CAMERA_PERMISSION_CODE = 1001;
 
     private ImageView imageView;
@@ -41,8 +37,8 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap frontImage = null;
     private Bitmap backImage = null;
 
-    private SharedPreferences prefs;
-    private final String TABLE_PREF_KEY = "persisted_table";
+    // Room database
+    private MyDatabase db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,39 +48,36 @@ public class MainActivity extends AppCompatActivity {
 
         // Two buttons for Front and Back
         Button frontBtn = findViewById(R.id.frontBtn);
-        Button backBtn  = findViewById(R.id.backBtn);
+        Button backBtn = findViewById(R.id.backBtn);
 
-        // Setup RecyclerView and persistent table data
+        // Setup RecyclerView
         tableView = findViewById(R.id.tableView);
         tableView.setLayoutManager(new LinearLayoutManager(this));
         tableAdapter = new TableAdapter(tableData);
         tableView.setAdapter(tableAdapter);
 
-        prefs = getSharedPreferences("tablepref", Context.MODE_PRIVATE);
+        db = Room.databaseBuilder(getApplicationContext(),
+                MyDatabase.class, "table_database")
+                .allowMainThreadQueries() // Easy for demo, use async for real app!
+                .build();
+
         loadTableData();
 
         ocrManager = new OCRManager(this, new OCRManager.OCRResultListener() {
             @Override
             public void onOCRResult(TableModel result) {
-                // Keep Sr. number incrementing
+                // Set Sr. number
                 result.no = tableData.size() + 1;
-                tableData.add(result);
-                tableAdapter.notifyDataSetChanged();
-                saveTableData();
-                // Clear previews for next input
+                insertTableRow(result);
+                // Reset previews for new scan
                 frontImage = null;
                 backImage = null;
                 imageView.setImageDrawable(null);
             }
         });
 
-        frontBtn.setOnClickListener(v -> {
-            selectImage(true);
-        });
-
-        backBtn.setOnClickListener(v -> {
-            selectImage(false);
-        });
+        frontBtn.setOnClickListener(v -> selectImage(true));
+        backBtn.setOnClickListener(v -> selectImage(false));
     }
 
     private void selectImage(boolean isFront) {
@@ -113,7 +106,7 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == CAMERA_PERMISSION_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Permission just granted, notify user to retry
+                // Permission granted, user can retry
             }
         }
     }
@@ -122,17 +115,17 @@ public class MainActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         Bitmap photo = null;
-
         if (resultCode == RESULT_OK && data != null) {
             if ((requestCode == FRONT_CAMERA_REQUEST || requestCode == BACK_CAMERA_REQUEST) && data.getExtras() != null) {
                 photo = (Bitmap) data.getExtras().get("data");
             } else if ((requestCode == FRONT_GALLERY_REQUEST || requestCode == BACK_GALLERY_REQUEST) && data.getData() != null) {
                 try {
                     photo = MediaStore.Images.Media.getBitmap(this.getContentResolver(), data.getData());
-                } catch (Exception e) { e.printStackTrace(); }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         }
-
         if (photo != null) {
             imageView.setImageBitmap(photo);
             if (requestCode == FRONT_CAMERA_REQUEST || requestCode == FRONT_GALLERY_REQUEST) {
@@ -140,7 +133,6 @@ public class MainActivity extends AppCompatActivity {
             } else if (requestCode == BACK_CAMERA_REQUEST || requestCode == BACK_GALLERY_REQUEST) {
                 backImage = photo;
             }
-            // If both provided, run extraction
             if (frontImage != null && backImage != null) {
                 ocrManager.setFrontImage(frontImage);
                 ocrManager.setBackImage(backImage);
@@ -149,25 +141,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // ----------- Persistence using Gson and SharedPreferences ------------
+    // --- ROOM Persistence Methods ---
 
-    private void saveTableData() {
-        Gson gson = new Gson();
-        String json = gson.toJson(tableData);
-        prefs.edit().putString(TABLE_PREF_KEY, json).apply();
+    private void insertTableRow(TableModel row) {
+        db.tableModelDao().insert(row);
+        loadTableData();
     }
-
     private void loadTableData() {
-        Gson gson = new Gson();
-        String json = prefs.getString(TABLE_PREF_KEY, null);
-        if (json != null) {
-            try {
-                ArrayList<TableModel> saved = gson.fromJson(json, new TypeToken<ArrayList<TableModel>>(){}.getType());
-                if (saved != null) {
-                    tableData.clear();
-                    tableData.addAll(saved);
-                }
-            } catch (Exception ignored) { }
-        }
+        tableData.clear();
+        List<TableModel> saved = db.tableModelDao().getAll();
+        if (saved != null) tableData.addAll(saved);
+        tableAdapter.notifyDataSetChanged();
     }
 }
