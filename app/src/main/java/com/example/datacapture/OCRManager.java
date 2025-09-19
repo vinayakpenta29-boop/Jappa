@@ -10,20 +10,17 @@ import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.*;
 
 public class OCRManager {
     public interface OCRResultListener {
-        void onOCRResult(TableModel combinedResult);
+        void onOCRResult(TableModel result);
     }
 
     private Context context;
     private OCRResultListener listener;
     private BarcodeScanner barcodeScanner;
-    private Bitmap frontImage = null;
-    private Bitmap backImage = null;
 
     public OCRManager(Context ctx, OCRResultListener l) {
         context = ctx;
@@ -33,43 +30,20 @@ public class OCRManager {
             .build());
     }
 
-    public void setFrontImage(Bitmap front) { this.frontImage = front; }
-    public void setBackImage(Bitmap back) { this.backImage = back; }
-
-    // OCR both sides, merge result, send to listener
-    public void processBoth() {
-        if (frontImage == null || backImage == null) return;
-        extractData(frontImage, frontData ->
-            extractData(backImage, backData -> {
-                TableModel combined = new TableModel(
-                        frontData.no > 0 ? frontData.no : backData.no,
-                        notEmpty(frontData.salesmanNo, backData.salesmanNo),
-                        notEmpty(backData.barcode, ""),
-                        notEmpty(backData.vrpRate, ""),
-                        notEmpty(frontData.billNo, ""),
-                        notEmpty(frontData.date, ""),
-                        notEmpty(frontData.jappa, "")
-                );
-                listener.onOCRResult(combined);
-                // Reset after processing for next input
-                frontImage = null;
-                backImage = null;
-            })
-        );
-    }
-
-    private void extractData(Bitmap bitmap, java.util.function.Consumer<TableModel> action) {
+    public void processImage(Bitmap bitmap) {
         InputImage image = InputImage.fromBitmap(bitmap, 0);
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                .process(image)
-                .addOnSuccessListener(text -> barcodeScanner.process(image)
-                        .addOnSuccessListener(barcodes -> action.accept(parseData(text, barcodes)))
-                );
+            .process(image)
+            .addOnSuccessListener(text -> barcodeScanner.process(image)
+                .addOnSuccessListener(barcodes -> {
+                    TableModel result = parseData(text, barcodes);
+                    listener.onOCRResult(result);
+                })
+            );
     }
 
     private TableModel parseData(Text text, List<Barcode> barcodes) {
         String allText = text.getText();
-        // Robust regex, try exact, then fallback
         String salesmanNo = findFirstMatch(allText, "(?<!\\d)327(?!\\d)", "");
         String barcodeNum = !barcodes.isEmpty() ? barcodes.get(0).getDisplayValue() : "";
         String vrpRate = findFirstMatch(allText, "VRP Rate.*?([0-9,]+)[/\\-]", "");
@@ -82,10 +56,5 @@ public class OCRManager {
     private String findFirstMatch(String input, String regex, String fallback) {
         Matcher m = Pattern.compile(regex).matcher(input);
         return m.find() ? m.group(1) != null ? m.group(1) : m.group() : fallback;
-    }
-
-    private String notEmpty(String... vals) {
-        for (String v : vals) if (v != null && !v.trim().isEmpty()) return v;
-        return "";
     }
 }
