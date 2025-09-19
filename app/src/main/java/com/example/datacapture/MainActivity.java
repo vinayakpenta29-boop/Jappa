@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.ImageDecoder;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.widget.Button;
@@ -20,7 +21,6 @@ import androidx.room.Room;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
     private static final int FRONT_CAMERA_REQUEST = 2101;
@@ -58,7 +58,7 @@ public class MainActivity extends AppCompatActivity {
 
         db = Room.databaseBuilder(getApplicationContext(),
                 MyDatabase.class, "table_database")
-                .allowMainThreadQueries() // Easy for demo, use async for real app!
+                .allowMainThreadQueries()
                 .build();
 
         loadTableData();
@@ -66,10 +66,8 @@ public class MainActivity extends AppCompatActivity {
         ocrManager = new OCRManager(this, new OCRManager.OCRResultListener() {
             @Override
             public void onOCRResult(TableModel result) {
-                // Set Sr. number
                 result.no = tableData.size() + 1;
                 insertTableRow(result);
-                // Reset previews for new scan
                 frontImage = null;
                 backImage = null;
                 imageView.setImageDrawable(null);
@@ -120,7 +118,12 @@ public class MainActivity extends AppCompatActivity {
                 photo = (Bitmap) data.getExtras().get("data");
             } else if ((requestCode == FRONT_GALLERY_REQUEST || requestCode == BACK_GALLERY_REQUEST) && data.getData() != null) {
                 try {
-                    photo = MediaStore.Images.Media.getBitmap(this.getContentResolver(), data.getData());
+                    if (android.os.Build.VERSION.SDK_INT >= 29) {
+                        ImageDecoder.Source source = ImageDecoder.createSource(this.getContentResolver(), data.getData());
+                        photo = ImageDecoder.decodeBitmap(source);
+                    } else {
+                        photo = MediaStore.Images.Media.getBitmap(this.getContentResolver(), data.getData());
+                    }
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
