@@ -1,8 +1,8 @@
-package com.example.datacapture;
+package com.datacapture;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import com.google.mlkit.vision.barcode.Barcode;
+import com.google.mlkit.vision.barcode.common.Barcode;
 import com.google.mlkit.vision.barcode.BarcodeScanner;
 import com.google.mlkit.vision.barcode.BarcodeScanning;
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions;
@@ -34,7 +34,7 @@ public class OCRManager {
     public void processImage(Bitmap bitmap) {
         InputImage image = InputImage.fromBitmap(bitmap, 0);
 
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT).process(image)
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS).process(image)
             .addOnSuccessListener(text -> barcodeScanner.process(image)
                 .addOnSuccessListener(barcodes -> listener.onOCRResult(parseData(text, barcodes)))
             );
