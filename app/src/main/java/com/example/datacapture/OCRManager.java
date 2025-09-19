@@ -33,11 +33,11 @@ public class OCRManager {
 
     public void processImage(Bitmap bitmap) {
         InputImage image = InputImage.fromBitmap(bitmap, 0);
-
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS).process(image)
-            .addOnSuccessListener(text -> barcodeScanner.process(image)
-                .addOnSuccessListener(barcodes -> listener.onOCRResult(parseData(text, barcodes)))
-            );
+        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                .process(image)
+                .addOnSuccessListener(text -> barcodeScanner.process(image)
+                        .addOnSuccessListener(barcodes -> listener.onOCRResult(parseData(text, barcodes)))
+                );
     }
 
     private List<TableModel> parseData(Text text, List<Barcode> barcodes) {
@@ -52,23 +52,31 @@ public class OCRManager {
         String allText = String.join("\n", textBlocks);
         Matcher dateMatcher = dateP.matcher(allText);
 
-        String date = dateMatcher.find() ? dateMatcher.group() : "";
-        String barcodeNum = !barcodes.isEmpty() ? barcodes.get(0).getDisplayValue() : "";
+        String date = dateMatcher.find() ? dateMatcher.group() : "No data available";
+        String barcodeNum = !barcodes.isEmpty() ? barcodes.get(0).getDisplayValue() : "No data available";
 
-        String salesmanNo = "";
-        Matcher smMatcher = Pattern.compile("\\d{3}").matcher(allText);
+        String salesmanNo = "No data available";
+        Matcher smMatcher = Pattern.compile("\\b\\d{3}\\b").matcher(allText);
         if (smMatcher.find()) salesmanNo = smMatcher.group();
 
         Matcher billMatcher = Pattern.compile("Bill No.?[:]? ?(\\d+)").matcher(allText);
-        String billNo = billMatcher.find() ? billMatcher.group(1) : "";
+        String billNo = billMatcher.find() ? billMatcher.group(1) : "No data available";
 
         Matcher vrpMatcher = Pattern.compile("VRP Rate[:]? ?(\\d+)").matcher(allText);
-        String vrpRate = vrpMatcher.find() ? vrpMatcher.group(1) : "";
+        String vrpRate = vrpMatcher.find() ? vrpMatcher.group(1) : "No data available";
 
-        Matcher jappaMatcher = Pattern.compile("E[:]? ?(\\d+)").matcher(allText); // adjust E logic if needed
-        String jappa = jappaMatcher.find() ? jappaMatcher.group(1) : "";
+        Matcher jappaMatcher = Pattern.compile("E[:]? ?(\\d+)").matcher(allText);
+        String jappa = jappaMatcher.find() ? jappaMatcher.group(1) : "No data available";
 
-        TableModel row = new TableModel(results.size() + 1, salesmanNo, barcodeNum, vrpRate, billNo, date, jappa);
+        TableModel row = new TableModel(
+                results.size() + 1,
+                salesmanNo,
+                barcodeNum,
+                vrpRate,
+                billNo,
+                date,
+                jappa
+        );
         results.add(row);
         return results;
     }
