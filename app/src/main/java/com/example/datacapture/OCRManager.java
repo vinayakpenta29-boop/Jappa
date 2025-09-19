@@ -16,12 +16,14 @@ import java.util.regex.*;
 
 public class OCRManager {
     public interface OCRResultListener {
-        void onOCRResult(List<TableModel> results);
+        void onOCRResult(TableModel combinedResult);
     }
 
     private Context context;
     private OCRResultListener listener;
     private BarcodeScanner barcodeScanner;
+    private Bitmap frontImage = null;
+    private Bitmap backImage = null;
 
     public OCRManager(Context ctx, OCRResultListener l) {
         context = ctx;
@@ -31,53 +33,59 @@ public class OCRManager {
             .build());
     }
 
-    public void processImage(Bitmap bitmap) {
+    public void setFrontImage(Bitmap front) { this.frontImage = front; }
+    public void setBackImage(Bitmap back) { this.backImage = back; }
+
+    // OCR both sides, merge result, send to listener
+    public void processBoth() {
+        if (frontImage == null || backImage == null) return;
+        extractData(frontImage, frontData ->
+            extractData(backImage, backData -> {
+                TableModel combined = new TableModel(
+                        frontData.no > 0 ? frontData.no : backData.no,
+                        notEmpty(frontData.salesmanNo, backData.salesmanNo),
+                        notEmpty(backData.barcode, ""),
+                        notEmpty(backData.vrpRate, ""),
+                        notEmpty(frontData.billNo, ""),
+                        notEmpty(frontData.date, ""),
+                        notEmpty(frontData.jappa, "")
+                );
+                listener.onOCRResult(combined);
+                // Reset after processing for next input
+                frontImage = null;
+                backImage = null;
+            })
+        );
+    }
+
+    private void extractData(Bitmap bitmap, java.util.function.Consumer<TableModel> action) {
         InputImage image = InputImage.fromBitmap(bitmap, 0);
         TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
                 .process(image)
                 .addOnSuccessListener(text -> barcodeScanner.process(image)
-                        .addOnSuccessListener(barcodes -> listener.onOCRResult(parseData(text, barcodes)))
+                        .addOnSuccessListener(barcodes -> action.accept(parseData(text, barcodes)))
                 );
     }
 
-    private List<TableModel> parseData(Text text, List<Barcode> barcodes) {
-        List<TableModel> results = new ArrayList<>();
-        String dateRegex = "\\d{2}/\\d{2}/\\d{4}";
-        Pattern dateP = Pattern.compile(dateRegex);
+    private TableModel parseData(Text text, List<Barcode> barcodes) {
+        String allText = text.getText();
+        // Robust regex, try exact, then fallback
+        String salesmanNo = findFirstMatch(allText, "(?<!\\d)327(?!\\d)", "");
+        String barcodeNum = !barcodes.isEmpty() ? barcodes.get(0).getDisplayValue() : "";
+        String vrpRate = findFirstMatch(allText, "VRP Rate.*?([0-9,]+)[/\\-]", "");
+        String billNo = findFirstMatch(allText, "Bill No.?[:]? ?(\\d+)", "");
+        String date = findFirstMatch(allText, "\\d{2}/\\d{2}/\\d{4}", "");
+        String jappa = findFirstMatch(allText, "E[:]? ?(\\d+)", "");
+        return new TableModel(0, salesmanNo, barcodeNum, vrpRate, billNo, date, jappa);
+    }
 
-        List<String> textBlocks = new ArrayList<>();
-        for (Text.TextBlock block : text.getTextBlocks()) {
-            textBlocks.add(block.getText());
-        }
-        String allText = String.join("\n", textBlocks);
-        Matcher dateMatcher = dateP.matcher(allText);
+    private String findFirstMatch(String input, String regex, String fallback) {
+        Matcher m = Pattern.compile(regex).matcher(input);
+        return m.find() ? m.group(1) != null ? m.group(1) : m.group() : fallback;
+    }
 
-        String date = dateMatcher.find() ? dateMatcher.group() : "No data available";
-        String barcodeNum = !barcodes.isEmpty() ? barcodes.get(0).getDisplayValue() : "No data available";
-
-        String salesmanNo = "No data available";
-        Matcher smMatcher = Pattern.compile("\\b\\d{3}\\b").matcher(allText);
-        if (smMatcher.find()) salesmanNo = smMatcher.group();
-
-        Matcher billMatcher = Pattern.compile("Bill No.?[:]? ?(\\d+)").matcher(allText);
-        String billNo = billMatcher.find() ? billMatcher.group(1) : "No data available";
-
-        Matcher vrpMatcher = Pattern.compile("VRP Rate[:]? ?(\\d+)").matcher(allText);
-        String vrpRate = vrpMatcher.find() ? vrpMatcher.group(1) : "No data available";
-
-        Matcher jappaMatcher = Pattern.compile("E[:]? ?(\\d+)").matcher(allText);
-        String jappa = jappaMatcher.find() ? jappaMatcher.group(1) : "No data available";
-
-        TableModel row = new TableModel(
-                results.size() + 1,
-                salesmanNo,
-                barcodeNum,
-                vrpRate,
-                billNo,
-                date,
-                jappa
-        );
-        results.add(row);
-        return results;
+    private String notEmpty(String... vals) {
+        for (String v : vals) if (v != null && !v.trim().isEmpty()) return v;
+        return "";
     }
 }
