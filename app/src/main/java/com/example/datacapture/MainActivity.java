@@ -26,10 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
-    private static final int FRONT_CAMERA_REQUEST = 2101;
-    private static final int BACK_CAMERA_REQUEST = 2102;
-    private static final int FRONT_GALLERY_REQUEST = 2103;
-    private static final int BACK_GALLERY_REQUEST = 2104;
+    private static final int CAMERA_REQUEST = 2101;
+    private static final int GALLERY_REQUEST = 2102;
     private static final int CAMERA_PERMISSION_CODE = 1001;
 
     private ImageView imageView;
@@ -37,9 +35,7 @@ public class MainActivity extends AppCompatActivity {
     private TableAdapter tableAdapter;
     private ArrayList<TableModel> tableData = new ArrayList<>();
     private OCRManager ocrManager;
-    private Bitmap frontImage = null;
-    private Bitmap backImage = null;
-
+    private Bitmap inputImage = null;
     private MyDatabase db;
 
     @Override
@@ -48,8 +44,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         imageView = findViewById(R.id.imageView);
 
-        Button frontBtn = findViewById(R.id.frontBtn);
-        Button backBtn = findViewById(R.id.backBtn);
+        Button importBtn = findViewById(R.id.frontBtn); // now single button, rename in layout as needed
 
         tableView = findViewById(R.id.tableView);
         tableView.setLayoutManager(new LinearLayoutManager(this));
@@ -68,20 +63,18 @@ public class MainActivity extends AppCompatActivity {
             public void onOCRResult(TableModel result) {
                 result.no = tableData.size() + 1;
                 insertTableRow(result);
-                frontImage = null;
-                backImage = null;
+                inputImage = null;
                 imageView.setImageDrawable(null);
             }
         });
 
-        frontBtn.setOnClickListener(v -> selectImage(true));
-        backBtn.setOnClickListener(v -> selectImage(false));
+        importBtn.setOnClickListener(v -> selectImage());
     }
 
-    private void selectImage(boolean isFront) {
+    private void selectImage() {
         String[] options = {"Camera", "Gallery"};
         androidx.appcompat.app.AlertDialog.Builder builder = new androidx.appcompat.app.AlertDialog.Builder(this);
-        builder.setTitle(isFront ? "Select Front Side" : "Select Back Side")
+        builder.setTitle("Select Image")
                 .setItems(options, (dialog, which) -> {
                     if (which == 0) {
                         // Camera
@@ -89,12 +82,12 @@ public class MainActivity extends AppCompatActivity {
                             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_CODE);
                         } else {
                             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-                            startActivityForResult(intent, isFront ? FRONT_CAMERA_REQUEST : BACK_CAMERA_REQUEST);
+                            startActivityForResult(intent, CAMERA_REQUEST);
                         }
                     } else {
                         // Gallery
                         Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-                        startActivityForResult(intent, isFront ? FRONT_GALLERY_REQUEST : BACK_GALLERY_REQUEST);
+                        startActivityForResult(intent, GALLERY_REQUEST);
                     }
                 }).show();
     }
@@ -115,13 +108,13 @@ public class MainActivity extends AppCompatActivity {
         Bitmap photo = null;
         if (resultCode == RESULT_OK && data != null) {
             try {
-                if ((requestCode == FRONT_CAMERA_REQUEST || requestCode == BACK_CAMERA_REQUEST) && data.getExtras() != null) {
+                if (requestCode == CAMERA_REQUEST && data.getExtras() != null) {
                     photo = (Bitmap) data.getExtras().get("data");
-                } else if ((requestCode == FRONT_GALLERY_REQUEST || requestCode == BACK_GALLERY_REQUEST) && data.getData() != null) {
+                } else if (requestCode == GALLERY_REQUEST && data.getData() != null) {
                     if (Build.VERSION.SDK_INT >= 29) {
                         ImageDecoder.Source source = ImageDecoder.createSource(this.getContentResolver(), data.getData());
                         photo = ImageDecoder.decodeBitmap(source, (decoder, info, src) -> {
-                            int targetWidth = 600; // even more conservative for memory
+                            int targetWidth = 600;
                             int targetHeight = 600;
                             int srcWidth = info.getSize().getWidth();
                             int srcHeight = info.getSize().getHeight();
@@ -165,16 +158,10 @@ public class MainActivity extends AppCompatActivity {
         }
         if (photo != null) {
             imageView.setImageBitmap(photo);
-            if (requestCode == FRONT_CAMERA_REQUEST || requestCode == FRONT_GALLERY_REQUEST) {
-                frontImage = photo;
-            } else if (requestCode == BACK_CAMERA_REQUEST || requestCode == BACK_GALLERY_REQUEST) {
-                backImage = photo;
-            }
-            if (frontImage != null && backImage != null) {
-                ocrManager.setFrontImage(frontImage);
-                ocrManager.setBackImage(backImage);
-                ocrManager.processBoth();
-            }
+            inputImage = photo;
+            ocrManager.setFrontImage(inputImage); // Reuse the same field/method
+            ocrManager.setBackImage(null);
+            ocrManager.processBoth(); // For single image use, just implement single image parse inside OCRManager for now!
         } else if (resultCode == RESULT_OK && data != null) {
             Toast.makeText(this, "Could not read image. Try with a different image.", Toast.LENGTH_LONG).show();
         }
@@ -184,6 +171,7 @@ public class MainActivity extends AppCompatActivity {
         db.tableModelDao().insert(row);
         loadTableData();
     }
+
     private void loadTableData() {
         tableData.clear();
         List<TableModel> saved = db.tableModelDao().getAll();
