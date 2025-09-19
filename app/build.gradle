@@ -44,6 +44,15 @@ dependencies {
     // MPAndroidChart dependency for charting support
     implementation 'com.github.PhilJay:MPAndroidChart:v3.1.0'
 
+    // RecyclerView for table display
+    implementation 'androidx.recyclerview:recyclerview:1.2.1'
+
+    // ML Kit Barcode Scanning (latest as of 2025)
+    implementation 'com.google.mlkit:barcode-scanning:17.3.0'
+
+    // ML Kit Text Recognition (latest as of 2025)
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
