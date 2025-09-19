@@ -35,7 +35,6 @@ public class MainActivity extends AppCompatActivity {
     private TableAdapter tableAdapter;
     private ArrayList<TableModel> tableData = new ArrayList<>();
     private OCRManager ocrManager;
-    private Bitmap inputImage = null;
     private MyDatabase db;
 
     @Override
@@ -44,7 +43,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         imageView = findViewById(R.id.imageView);
 
-        Button importBtn = findViewById(R.id.frontBtn); // now single button, rename in layout as needed
+        Button importBtn = findViewById(R.id.frontBtn);
 
         tableView = findViewById(R.id.tableView);
         tableView.setLayoutManager(new LinearLayoutManager(this));
@@ -58,14 +57,10 @@ public class MainActivity extends AppCompatActivity {
 
         loadTableData();
 
-        ocrManager = new OCRManager(this, new OCRManager.OCRResultListener() {
-            @Override
-            public void onOCRResult(TableModel result) {
-                result.no = tableData.size() + 1;
-                insertTableRow(result);
-                inputImage = null;
-                imageView.setImageDrawable(null);
-            }
+        ocrManager = new OCRManager(this, result -> {
+            result.no = tableData.size() + 1;
+            insertTableRow(result);
+            imageView.setImageDrawable(null);
         });
 
         importBtn.setOnClickListener(v -> selectImage());
@@ -120,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
                             int srcHeight = info.getSize().getHeight();
                             float ratio = Math.min((float) targetWidth / srcWidth, (float) targetHeight / srcHeight);
                             if (ratio < 1.0f) {
-                                decoder.setTargetSize((int)(srcWidth * ratio), (int)(srcHeight * ratio));
+                                decoder.setTargetSize((int) (srcWidth * ratio), (int) (srcHeight * ratio));
                             }
                         });
                     } else {
@@ -158,10 +153,7 @@ public class MainActivity extends AppCompatActivity {
         }
         if (photo != null) {
             imageView.setImageBitmap(photo);
-            inputImage = photo;
-            ocrManager.setFrontImage(inputImage); // Reuse the same field/method
-            ocrManager.setBackImage(null);
-            ocrManager.processBoth(); // For single image use, just implement single image parse inside OCRManager for now!
+            ocrManager.processImage(photo);
         } else if (resultCode == RESULT_OK && data != null) {
             Toast.makeText(this, "Could not read image. Try with a different image.", Toast.LENGTH_LONG).show();
         }
