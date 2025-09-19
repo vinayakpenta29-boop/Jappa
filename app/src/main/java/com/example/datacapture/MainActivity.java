@@ -10,6 +10,7 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -39,7 +40,6 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap frontImage = null;
     private Bitmap backImage = null;
 
-    // Room database
     private MyDatabase db;
 
     @Override
@@ -48,7 +48,6 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         imageView = findViewById(R.id.imageView);
 
-        // Two buttons for Front and Back
         Button frontBtn = findViewById(R.id.frontBtn);
         Button backBtn = findViewById(R.id.backBtn);
 
@@ -115,36 +114,34 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
         Bitmap photo = null;
         if (resultCode == RESULT_OK && data != null) {
-            if ((requestCode == FRONT_CAMERA_REQUEST || requestCode == BACK_CAMERA_REQUEST) && data.getExtras() != null) {
-                photo = (Bitmap) data.getExtras().get("data");
-            } else if ((requestCode == FRONT_GALLERY_REQUEST || requestCode == BACK_GALLERY_REQUEST) && data.getData() != null) {
-                try {
+            try {
+                if ((requestCode == FRONT_CAMERA_REQUEST || requestCode == BACK_CAMERA_REQUEST) && data.getExtras() != null) {
+                    photo = (Bitmap) data.getExtras().get("data");
+                } else if ((requestCode == FRONT_GALLERY_REQUEST || requestCode == BACK_GALLERY_REQUEST) && data.getData() != null) {
                     if (Build.VERSION.SDK_INT >= 29) {
                         ImageDecoder.Source source = ImageDecoder.createSource(this.getContentResolver(), data.getData());
                         photo = ImageDecoder.decodeBitmap(source, (decoder, info, src) -> {
-                            // Target size (max 1000x1000 to avoid crash; adjust as needed)
-                            int targetWidth = 1000;
-                            int targetHeight = 1000;
+                            int targetWidth = 600; // even more conservative for memory
+                            int targetHeight = 600;
                             int srcWidth = info.getSize().getWidth();
                             int srcHeight = info.getSize().getHeight();
-                            float ratio = Math.min((float)targetWidth / srcWidth, (float)targetHeight / srcHeight);
+                            float ratio = Math.min((float) targetWidth / srcWidth, (float) targetHeight / srcHeight);
                             if (ratio < 1.0f) {
                                 decoder.setTargetSize((int)(srcWidth * ratio), (int)(srcHeight * ratio));
                             }
                         });
                     } else {
-                        // For API < 29; downsample bitmap
                         android.net.Uri uri = data.getData();
                         android.content.ContentResolver resolver = getContentResolver();
                         android.graphics.BitmapFactory.Options onlyBoundsOpts = new android.graphics.BitmapFactory.Options();
                         onlyBoundsOpts.inJustDecodeBounds = true;
                         InputStream input = resolver.openInputStream(uri);
                         android.graphics.BitmapFactory.decodeStream(input, null, onlyBoundsOpts);
-                        input.close();
+                        if (input != null) input.close();
 
                         int srcWidth = onlyBoundsOpts.outWidth;
                         int srcHeight = onlyBoundsOpts.outHeight;
-                        int targetWidth = 1000, targetHeight = 1000;
+                        int targetWidth = 600, targetHeight = 600;
 
                         int inSampleSize = 1;
                         if (srcHeight > targetHeight || srcWidth > targetWidth) {
@@ -158,11 +155,12 @@ public class MainActivity extends AppCompatActivity {
                         bitmapOpts.inSampleSize = inSampleSize;
                         input = resolver.openInputStream(uri);
                         photo = android.graphics.BitmapFactory.decodeStream(input, null, bitmapOpts);
-                        input.close();
+                        if (input != null) input.close();
                     }
-                } catch (Exception e) {
-                    e.printStackTrace();
                 }
+            } catch (Exception e) {
+                e.printStackTrace();
+                photo = null;
             }
         }
         if (photo != null) {
@@ -177,10 +175,10 @@ public class MainActivity extends AppCompatActivity {
                 ocrManager.setBackImage(backImage);
                 ocrManager.processBoth();
             }
+        } else if (resultCode == RESULT_OK && data != null) {
+            Toast.makeText(this, "Could not read image. Try with a different image.", Toast.LENGTH_LONG).show();
         }
     }
-
-    // --- ROOM Persistence Methods ---
 
     private void insertTableRow(TableModel row) {
         db.tableModelDao().insert(row);
