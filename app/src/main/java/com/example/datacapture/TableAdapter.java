@@ -25,12 +25,12 @@ public class TableAdapter extends RecyclerView.Adapter<TableAdapter.ViewHolder> 
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         TableModel item = items.get(position);
         holder.no.setText(String.valueOf(item.no));
-        holder.salesmanNo.setText(item.salesmanNo);
-        holder.barcode.setText(item.barcode);
-        holder.vrpRate.setText(item.vrpRate);
-        holder.billNo.setText(item.billNo);
-        holder.date.setText(item.date);
-        holder.jappa.setText(item.jappa);
+        holder.salesmanNo.setText(item.salesmanNo.isEmpty() ? "No data available" : item.salesmanNo);
+        holder.barcode.setText(item.barcode.isEmpty() ? "No data available" : item.barcode);
+        holder.vrpRate.setText(item.vrpRate.isEmpty() ? "No data available" : item.vrpRate);
+        holder.billNo.setText(item.billNo.isEmpty() ? "No data available" : item.billNo);
+        holder.date.setText(item.date.isEmpty() ? "No data available" : item.date);
+        holder.jappa.setText(item.jappa.isEmpty() ? "No data available" : item.jappa);
     }
 
     @Override
