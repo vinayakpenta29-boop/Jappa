@@ -1,4 +1,4 @@
-package com.datacapture;
+package com.example.datacapture;
 
 import android.view.LayoutInflater;
 import android.view.View;
