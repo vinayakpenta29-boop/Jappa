@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.ImageDecoder;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.widget.Button;
@@ -19,6 +20,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.room.Room;
 
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,7 +52,6 @@ public class MainActivity extends AppCompatActivity {
         Button frontBtn = findViewById(R.id.frontBtn);
         Button backBtn = findViewById(R.id.backBtn);
 
-        // Setup RecyclerView
         tableView = findViewById(R.id.tableView);
         tableView.setLayoutManager(new LinearLayoutManager(this));
         tableAdapter = new TableAdapter(tableData);
@@ -118,11 +119,46 @@ public class MainActivity extends AppCompatActivity {
                 photo = (Bitmap) data.getExtras().get("data");
             } else if ((requestCode == FRONT_GALLERY_REQUEST || requestCode == BACK_GALLERY_REQUEST) && data.getData() != null) {
                 try {
-                    if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    if (Build.VERSION.SDK_INT >= 29) {
                         ImageDecoder.Source source = ImageDecoder.createSource(this.getContentResolver(), data.getData());
-                        photo = ImageDecoder.decodeBitmap(source);
+                        photo = ImageDecoder.decodeBitmap(source, (decoder, info, src) -> {
+                            // Target size (max 1000x1000 to avoid crash; adjust as needed)
+                            int targetWidth = 1000;
+                            int targetHeight = 1000;
+                            int srcWidth = info.getSize().getWidth();
+                            int srcHeight = info.getSize().getHeight();
+                            float ratio = Math.min((float)targetWidth / srcWidth, (float)targetHeight / srcHeight);
+                            if (ratio < 1.0f) {
+                                decoder.setTargetSize((int)(srcWidth * ratio), (int)(srcHeight * ratio));
+                            }
+                        });
                     } else {
-                        photo = MediaStore.Images.Media.getBitmap(this.getContentResolver(), data.getData());
+                        // For API < 29; downsample bitmap
+                        android.net.Uri uri = data.getData();
+                        android.content.ContentResolver resolver = getContentResolver();
+                        android.graphics.BitmapFactory.Options onlyBoundsOpts = new android.graphics.BitmapFactory.Options();
+                        onlyBoundsOpts.inJustDecodeBounds = true;
+                        InputStream input = resolver.openInputStream(uri);
+                        android.graphics.BitmapFactory.decodeStream(input, null, onlyBoundsOpts);
+                        input.close();
+
+                        int srcWidth = onlyBoundsOpts.outWidth;
+                        int srcHeight = onlyBoundsOpts.outHeight;
+                        int targetWidth = 1000, targetHeight = 1000;
+
+                        int inSampleSize = 1;
+                        if (srcHeight > targetHeight || srcWidth > targetWidth) {
+                            final int halfHeight = srcHeight / 2;
+                            final int halfWidth = srcWidth / 2;
+                            while ((halfHeight / inSampleSize) >= targetHeight && (halfWidth / inSampleSize) >= targetWidth) {
+                                inSampleSize *= 2;
+                            }
+                        }
+                        android.graphics.BitmapFactory.Options bitmapOpts = new android.graphics.BitmapFactory.Options();
+                        bitmapOpts.inSampleSize = inSampleSize;
+                        input = resolver.openInputStream(uri);
+                        photo = android.graphics.BitmapFactory.decodeStream(input, null, bitmapOpts);
+                        input.close();
                     }
                 } catch (Exception e) {
                     e.printStackTrace();
