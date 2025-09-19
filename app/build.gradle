@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.datacapture'
+    namespace 'com.example.datacapture'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.datacapture"
+        applicationId "com.example.datacapture"
         minSdk 24
         targetSdk 34
         versionCode 1
