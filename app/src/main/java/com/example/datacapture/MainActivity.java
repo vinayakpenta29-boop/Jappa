@@ -8,7 +8,6 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.widget.Button;
 import android.widget.ImageView;
-import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -20,6 +19,7 @@ import java.util.ArrayList;
 
 public class MainActivity extends AppCompatActivity {
     private static final int CAMERA_REQUEST = 1888;
+    private static final int GALLERY_REQUEST = 1889;
     private static final int CAMERA_PERMISSION_CODE = 100;
     private ImageView imageView;
     private RecyclerView tableView;
@@ -34,6 +34,7 @@ public class MainActivity extends AppCompatActivity {
 
         imageView = findViewById(R.id.imageView);
         Button cameraBtn = findViewById(R.id.cameraBtn);
+        Button galleryBtn = findViewById(R.id.galleryBtn);
 
         tableView = findViewById(R.id.tableView);
         tableAdapter = new TableAdapter(tableData);
@@ -52,6 +53,11 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 openCamera();
             }
+        });
+
+        galleryBtn.setOnClickListener(v -> {
+            Intent intent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            startActivityForResult(intent, GALLERY_REQUEST);
         });
     }
 
@@ -73,12 +79,21 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == CAMERA_REQUEST && resultCode == RESULT_OK && data != null && data.getExtras() != null) {
-            Bitmap photo = (Bitmap) data.getExtras().get("data");
-            if (photo != null) {
-                imageView.setImageBitmap(photo);
-                ocrManager.processImage(photo);
+        Bitmap photo = null;
+        if (resultCode == RESULT_OK && data != null) {
+            if (requestCode == CAMERA_REQUEST && data.getExtras() != null) {
+                photo = (Bitmap) data.getExtras().get("data");
+            } else if (requestCode == GALLERY_REQUEST && data.getData() != null) {
+                try {
+                    photo = MediaStore.Images.Media.getBitmap(this.getContentResolver(), data.getData());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
+        }
+        if (photo != null) {
+            imageView.setImageBitmap(photo);
+            ocrManager.processImage(photo);
         }
     }
 }
