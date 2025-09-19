@@ -1,4 +1,4 @@
-package com.datacapture;
+package com.example.datacapture;
 
 import android.content.Context;
 import android.graphics.Bitmap;
